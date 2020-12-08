@@ -1,0 +1,7 @@
+{
+  "publish": {
+    "PACKAGE": "bash",
+    "GH_USER": "jc21-rpm",
+    "VERSION": "5.0.17"
+  }
+}
