@@ -1,31 +1,33 @@
-%global debug_package %{nil}
 #% define beta_tag rc2
-%define patchleveltag .17
-%define baseversion 5.0
+%define patchlevel 26
+%define baseversion 5.2
 %bcond_without tests
 
-Version: %{baseversion}%{patchleveltag}
+Version: %{baseversion}.%{patchlevel}
 Name: bash
 Summary: The GNU Bourne Again shell
 Release: 3%{?dist}
-License: GPLv3+
+License: GPL-3.0-or-later
 Url: https://www.gnu.org/software/bash
 Source0: https://ftp.gnu.org/gnu/bash/bash-%{baseversion}.tar.gz
-
 # For now there isn't any doc
 #Source2: ftp://ftp.gnu.org/gnu/bash/bash-doc-%%{version}.tar.gz
 
 Source1: dot-bashrc
 Source2: dot-bash_profile
 Source3: dot-bash_logout
+Source4: https://ftp.gnu.org/gnu/bash/bash-%{baseversion}.tar.gz.sig
+# Retreived from https://tiswww.cwru.edu/~chet/gpgkey.asc
+# which is the https version of the link on http://tiswww.case.edu/php/chet/bash/bashtop.html
+Source5: chet-gpgkey.asc
 
 # Official upstream patches
 # Patches are converted to apply with '-p1'
-%{lua:for i=1,17 do print(string.format("Patch%u: bash-5.0-patch-%u.patch\n", i, i)) end}
+%{lua:for i=1,rpm.expand('%{patchlevel}') do
+    print(string.format('Patch%u: bash-%s-patch-%u.patch\n', i, rpm.expand('%{baseversion}'), i))
+end}
 
 # Other patches
-# We don't want to add '/etc:/usr/etc' in standard utils path.
-Patch101: bash-2.03-paths.patch
 # Non-interactive shells beginning with argv[0][0] == '-' should run the startup files when not in posix mode.
 Patch102: bash-2.03-profile.patch
 # https://bugzilla.redhat.com/show_bug.cgi?id=60870
@@ -34,12 +36,10 @@ Patch103: bash-2.05a-interpreter.patch
 Patch104: bash-2.05b-debuginfo.patch
 # Pid passed to setpgrp() can not be pid of a zombie process.
 Patch105: bash-2.05b-pgrp_sync.patch
-# Enable audit logs
-Patch106: bash-3.2-audit.patch
 # Source bashrc file when bash is run under ssh.
 Patch107: bash-3.2-ssh_source_bash.patch
 # Use makeinfo to generate .texi file
-Patch108: bash-infotags.patch
+# Patch108: bash-infotags.patch
 # Try to pick up latest `--rpm-requires` patch from http://git.altlinux.org/gears/b/bash4.git
 Patch109: bash-requires.patch
 Patch110: bash-setlocale.patch
@@ -56,9 +56,9 @@ Patch117: bash-4.1-examples.patch
 # when output does not succeed due to EPIPE
 Patch118: bash-4.1-broken_pipe.patch
 
-# # Enable system-wide .bash_logout for login shells
+# Enable system-wide .bash_logout for login shells
 Patch119: bash-4.2-rc2-logout.patch
-#
+
 # Static analyzis shows some issues in bash-2.05a-interpreter.patch
 Patch120: bash-4.2-coverity.patch
 
@@ -69,27 +69,39 @@ Patch122: bash-4.2-manpage_trap.patch
 # https://www.securecoding.cert.org/confluence/display/seccode/INT32-C.+Ensure+that+operations+on+signed+integers+do+not+result+in+overflow
 # This patch should be upstreamed.
 Patch123: bash-4.2-size_type.patch
-#
+
 # 1112710 - mention ulimit -c and -f POSIX block size
 # This patch should be upstreamed.
 Patch124: bash-4.3-man-ulimit.patch
-#
+
 # 1102815 - fix double echoes in vi visual mode
 Patch125: bash-4.3-noecho.patch
-#
-# #1241533,1224855 - bash leaks memory when LC_ALL set
+
+#1241533,1224855 - bash leaks memory when LC_ALL set
 Patch126: bash-4.3-memleak-lc_all.patch
-#
+
 # bash-4.4 builds loadable builtin examples by default
 # this patch disables it
 Patch127: bash-4.4-no-loadable-builtins.patch
+
+# 2020528 - Add a runtime option to enable history logging to syslog
+# This option is undocumented in upstream and is documented by this patch
+Patch128: bash-5.0-syslog-history.patch
+Patch129: bash-configure-c99.patch
+Patch130: bash-configure-c99-2.patch
+
+# Enable audit logs
+Patch131: bash-4.3-audit.patch
 
 BuildRequires:  gcc
 BuildRequires: texinfo bison
 BuildRequires: ncurses-devel
 BuildRequires: autoconf, gettext
+BuildRequires: gnupg2
 # Required for bash tests
 BuildRequires: glibc-all-langpacks
+BuildRequires: make
+BuildRequires: audit-libs-devel
 Requires: filesystem >= 3
 Provides: /bin/sh
 Provides: /bin/bash
@@ -115,6 +127,7 @@ Requires: %{name} = %{version}-%{release}
 This package contains documentation files for %{name}.
 
 %prep
+%{gpgverify} --keyring='%{SOURCE5}' --signature='%{SOURCE4}' --data='%{SOURCE0}'
 %autosetup -n %{name}-%{baseversion} -p1
 
 echo %{version} > _distribution
@@ -130,7 +143,12 @@ autoconf
 # Recycles pids is neccessary. When bash's last fork's pid was X
 # and new fork's pid is also X, bash has to wait for this same pid.
 # Without Recycles pids bash will not wait.
-make "CPPFLAGS=-D_GNU_SOURCE -DRECYCLES_PIDS -DDEFAULT_PATH_VALUE='\"/usr/local/bin:/usr/bin\"' `getconf LFS_CFLAGS`" %{?_smp_mflags}
+MFLAGS="CPPFLAGS=-D_GNU_SOURCE -DRECYCLES_PIDS -DDEFAULT_PATH_VALUE='\"/usr/local/bin:/usr/bin\"' -DSTANDARD_UTILS_PATH='\"/bin:/usr/bin:/usr/sbin:/sbin\"' `getconf LFS_CFLAGS` -DSYSLOG_HISTORY -DSYSLOG_SHOPT=0"
+
+# work around missing deps in Makefiles
+make "$MFLAGS" version.h
+make "$MFLAGS" %{?_smp_mflags} -C builtins
+make "$MFLAGS" %{?_smp_mflags}
 
 %install
 if [ -e autoconf ]; then
@@ -253,7 +271,7 @@ end
 
 %postun -p <lua>
 -- Run it only if we are uninstalling
-if arg[2] == "0"
+if arg[2] == 0
 then
   t={}
   for line in io.lines("/etc/shells")
@@ -309,7 +327,108 @@ end
 %{_libdir}/pkgconfig/%{name}.pc
 
 %changelog
-* Fri Dec  4 2020 Siteshwar Vashisht <svashisht@redhat.com> - 5.0.17-3
+* Fri Feb 09 2024 Siteshwar Vashisht <svashisht@redhat.com> - 5.2.26-3
+- Update patch for audit logs
+  Resolves: RHEL-22619
+
+* Tue Jan 23 2024 Fedora Release Engineering <releng@fedoraproject.org> - 5.2.26-2
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_40_Mass_Rebuild
+
+* Mon Jan 22 2024 Siteshwar Vashisht <svashisht@redhat.com> - 5.2.26-1
+- Update to bash-5.2 patchlevel 26
+  Resolves: #2259619
+
+* Fri Jan 19 2024 Fedora Release Engineering <releng@fedoraproject.org> - 5.2.21-3
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_40_Mass_Rebuild
+
+* Mon Nov 20 2023 Florian Weimer <fweimer@redhat.com> - 5.2.21-2
+- Fix another C compatibility issue in the configure script
+
+* Fri Nov 10 2023 Siteshwar Vashisht <svashisht@redhat.com> - 5.2.21-1
+- Update to bash-5.2 patchlevel 21
+  Resolves: #2248970
+
+* Wed Jul 19 2023 Fedora Release Engineering <releng@fedoraproject.org> - 5.2.15-5
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_39_Mass_Rebuild
+
+* Tue Apr 11 2023 Lukáš Zaoral <lzaoral@redhat.com> - 5.2.15-4
+- migrate to SPDX license format
+
+* Mon Feb 06 2023 Florian Weimer <fweimer@redhat.com> - 5.2.15-3
+- Fix C99 compatibility issue on configure script
+
+* Wed Jan 18 2023 Fedora Release Engineering <releng@fedoraproject.org> - 5.2.15-2
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_38_Mass_Rebuild
+
+* Mon Jan 02 2023 Siteshwar Vashisht <svashisht@redhat.com> - 5.2.15-1
+- Update to bash-5.2 patchlevel 15
+  Resolves: #2152991
+
+* Fri Nov 18 2022 Debarshi Ray <rishi@fedoraproject.org> - 5.2.9-3
+- Override STANDARD_UTILS_PATH in the same way as DEFAULT_PATH_VALUE
+  Related: #2132363
+
+* Fri Nov 18 2022 Siteshwar Vashisht <svashisht@redhat.com> - 5.2.9-2
+- Fix binary file detection
+  Resolves: #2135537
+
+* Fri Nov 18 2022 Siteshwar Vashisht <svashisht@redhat.com> - 5.2.9-1
+- Update to bash-5.2 patchlevel 9
+  Resolves: #2140722
+
+* Mon Oct 10 2022 Siteshwar Vashisht <svashisht@redhat.com> - 5.2.2-2
+- Fix an issue with nested expansions
+  Resolves: #2133097
+
+* Thu Oct 06 2022 Siteshwar Vashisht <svashisht@redhat.com> - 5.2.2-1
+- Update to bash-5.2 patchlevel 2
+
+* Wed Oct 05 2022 Siteshwar Vashisht <svashisht@redhat.com> - 5.2.0-2
+- Bump version number
+  Related: #2129927
+
+* Tue Oct 04 2022 Siteshwar Vashisht <svashisht@redhat.com> - 5.2.0-1
+- Update to bash-5.2
+  Resolves: #2129927
+
+* Mon Sep 26 2022 Siteshwar Vashisht <svashisht@redhat.com> - 5.1.16-4
+- Add a null check in parameter_brace_transform() function
+  Resolves: #2122331
+
+* Wed Jul 20 2022 Fedora Release Engineering <releng@fedoraproject.org> - 5.1.16-3
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_37_Mass_Rebuild
+
+* Wed Jan 19 2022 Fedora Release Engineering <releng@fedoraproject.org> - 5.1.16-2
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_36_Mass_Rebuild
+
+* Mon Jan 17 2022 Siteshwar Vashisht <svashisht@redhat.com> - 5.1.16-1
+- Update to bash-5.1 patchlevel 16
+  Resolves: #2037042
+
+* Fri Nov 26 2021 Siteshwar Vashisht <svashisht@redhat.com> - 5.1.12-1
+- Update to bash-5.1 patchlevel 12
+
+* Fri Nov 05 2021 Siteshwar Vashisht <svashisht@redhat.com> - 5.1.8-3
+- Add a runtime option to enable history logging to syslog
+  Resolves: #2020528
+
+* Wed Jul 21 2021 Fedora Release Engineering <releng@fedoraproject.org> - 5.1.8-2
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_35_Mass_Rebuild
+
+* Sat May 29 2021 Siteshwar Vashisht <svashisht@redhat.com> - 5.1.8-1
+- Update to bash-5.1 patchlevel 8
+
+* Wed Feb 17 2021 Siteshwar Vashisht <svashisht@redhat.com> - 5.1.4-1
+- Update to bash-5.1 patchlevel 4
+
+* Tue Jan 26 2021 Fedora Release Engineering <releng@fedoraproject.org> - 5.1.0-2
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_34_Mass_Rebuild
+
+* Wed Jan  6 10:40:25 CET 2021 Siteshwar Vashisht <svashisht@redhat.com> - 5.1.0-1
+- Rebase to bash 5.1
+  Resolves: #1904866
+
+* Fri Dec  4 14:44:06 CET 2020 Siteshwar Vashisht <svashisht@redhat.com> - 5.0.17-3
 - Enable sourcing files from ~/.bashrc.d
   Resolves: #1726397
 
