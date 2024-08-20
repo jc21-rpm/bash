@@ -2,6 +2,6 @@
   "publish": {
     "PACKAGE": "bash",
     "GH_USER": "jc21-rpm",
-    "VERSION": "5.2.26"
+    "VERSION": "5.2.32"
   }
 }

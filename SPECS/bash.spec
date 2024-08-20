@@ -1,12 +1,12 @@
 #% define beta_tag rc2
-%define patchlevel 26
+%define patchlevel 32
 %define baseversion 5.2
 %bcond_without tests
 
 Version: %{baseversion}.%{patchlevel}
 Name: bash
 Summary: The GNU Bourne Again shell
-Release: 3%{?dist}
+Release: 1%{?dist}
 License: GPL-3.0-or-later
 Url: https://www.gnu.org/software/bash
 Source0: https://ftp.gnu.org/gnu/bash/bash-%{baseversion}.tar.gz
@@ -327,6 +327,9 @@ end
 %{_libdir}/pkgconfig/%{name}.pc
 
 %changelog
+* Wed Aug 21 2024 Jamie Curnow <jc@jc21.com> - 5.2.32-1
+- v5.2.32
+
 * Fri Feb 09 2024 Siteshwar Vashisht <svashisht@redhat.com> - 5.2.26-3
 - Update patch for audit logs
   Resolves: RHEL-22619
