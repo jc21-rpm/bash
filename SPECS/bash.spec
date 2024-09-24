@@ -1,5 +1,5 @@
 #% define beta_tag rc2
-%define patchlevel 32
+%define patchlevel 37
 %define baseversion 5.2
 %bcond_without tests
 
@@ -327,6 +327,9 @@ end
 %{_libdir}/pkgconfig/%{name}.pc
 
 %changelog
+* Tue Sep 24 2024 Jamie Curnow <jc@jc21.com> - 5.2.37-1
+- v5.2.37
+
 * Wed Aug 21 2024 Jamie Curnow <jc@jc21.com> - 5.2.32-1
 - v5.2.32
 
