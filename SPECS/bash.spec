@@ -1,5 +1,5 @@
 #% define beta_tag rc2
-%define patchlevel 37
+%define patchlevel 26
 %define baseversion 5.2
 %bcond_without tests
 
